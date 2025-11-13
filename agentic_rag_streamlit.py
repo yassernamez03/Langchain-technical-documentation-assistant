@@ -24,10 +24,16 @@ from supabase.client import Client, create_client
 # load environment variables
 load_dotenv()  
 
+def get_env_var(key: str):
+    """Get variable from Streamlit secrets (if deployed) or .env (if local)."""
+    return st.secrets.get(key, os.getenv(key))
 
-# initiating supabase
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
+
+# ============================
+# Initialize Supabase
+# ============================
+supabase_url = get_env_var("SUPABASE_URL")
+supabase_key = get_env_var("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
 # initiating embeddings model (local, free)
