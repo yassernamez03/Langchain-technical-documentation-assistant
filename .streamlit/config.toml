@@ -1,0 +1,7 @@
+[server]
+# Avoid probing torch.classes which can error under Streamlit's local watcher
+fileWatcherType = "none"  # change to "poll" if you want basic autoreload without watchdog
+
+[runner]
+# Optional: make reruns more responsive when you re-execute via UI
+fastReruns = true

@@ -1,118 +1,93 @@
-<h1>Agentic RAG (Retrieval Augmented Generation) with LangChain and Supabase</h1>
+# Agentic-RAG-with-LangChain (Groq)
 
-<h2>Watch the full tutorial on my YouTube Channel</h2>
-<div>
+This project has been migrated from OpenAI to Groq for chat inference and to free local HuggingFace embeddings for vector search.
 
-<a href="https://www.youtube.com/watch?v=3ZDeqTIXBPM">
-    <img src="thumbnail.png" alt="Thomas Janssen Youtube" width="200"/>
-</a>
-</div>
+## What changed
+- Chat model: `ChatOpenAI` ➜ `ChatGroq` using Groq's Llama 3 model.
+- Embeddings: `OpenAIEmbeddings` ➜ `HuggingFaceEmbeddings` (all-MiniLM-L6-v2).
+- Prompt: OpenAI-specific agent prompt ➜ provider-agnostic `structured-chat-agent`.
 
-<h2>Prerequisites</h2>
-<ul>
-  <li>Python 3.11+</li>
-</ul>
+## Prerequisites
+- Python 3.11+ (3.13 supported)
+- A Groq API key: https://console.groq.com
+- Supabase project with a `documents` table and `match_documents` RPC (as already used here)
 
-<h2>Installation</h2>
-<h3>1. Clone the repository:</h3>
+## Setup
+1. Create a `.env` file (or edit the existing one) and set:
+   - `GROQ_API_KEY="<your_groq_api_key>"`
+   - `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`
 
-```
-git clone https://github.com/ThomasJanssen-tech/Agentic-RAG-with-LangChain.git
-cd Agentic RAG with LangChain
-```
+2. Install dependencies:
 
-<h3>2. Create a virtual environment</h3>
-
-```
-python -m venv venv
+```powershell
+python -m pip install -r requirements.txt
 ```
 
-<h3>3. Activate the virtual environment</h3>
+The first run will download the HuggingFace embedding model automatically.
 
-```
-venv\Scripts\Activate
-(or on Mac): source venv/bin/activate
-```
+## Ingest your documents
+Place PDFs under the `documents/` folder, then run:
 
-<h3>4. Install libraries</h3>
-
-```
-pip install -r requirements.txt
-```
-
-<h3>5. Create accounts</h3>
-
-- Create a free account on Supabase: https://supabase.com/
-- Create an API key for OpenAI: https://platform.openai.com/api-keys
-
-<h3>6. Execute SQL queries in Supabase</h3>
-
-Execute the following SQL query in Supabase:
-
-```
--- Enable the pgvector extension to work with embedding vectors
-create extension if not exists vector;
-
--- Create a table to store your documents
-create table
-  documents (
-    id uuid primary key,
-    content text, -- corresponds to Document.pageContent
-    metadata jsonb, -- corresponds to Document.metadata
-    embedding vector (1536) -- 1536 works for OpenAI embeddings, change if needed
-  );
-
--- Create a function to search for documents
-create function match_documents (
-  query_embedding vector (1536),
-  filter jsonb default '{}'
-) returns table (
-  id uuid,
-  content text,
-  metadata jsonb,
-  similarity float
-) language plpgsql as $$
-#variable_conflict use_column
-begin
-  return query
-  select
-    id,
-    content,
-    metadata,
-    1 - (documents.embedding <=> query_embedding) as similarity
-  from documents
-  where metadata @> filter
-  order by documents.embedding <=> query_embedding;
-end;
-$$;
-```
-
-<h3>7. Add API keys to .env file</h3>
-
-- Rename .env.example to .env
-- Add the API keys for Supabase and OpenAI to the .env file
-
-<h2>Executing the scripts</h2>
-
-- Open a terminal in VS Code
-
-- Execute the following command:
-
-```
+```powershell
 python ingest_in_db.py
+```
+
+## Run a console example
+```powershell
 python agentic_rag.py
+```
+
+## Run the Streamlit app
+```powershell
 streamlit run agentic_rag_streamlit.py
 ```
 
-<h2>Sources</h2>
+## Notes
+- If you previously used OpenAI, the old `OPENAI_API_KEY` is no longer required.
+- You can switch the Groq model by changing the `model` parameter in `ChatGroq`.
+- For higher-quality retrieval, consider a stronger embedding model like `BAAI/bge-small-en-v1.5` and set `normalize_embeddings=True`.
 
-While making this video, I used the following sources:
+## Fix Supabase vector dimensions (384 vs 1536)
+If you see an error like `expected 1536 dimensions, not 384` during ingestion, your Supabase table was created for OpenAI embeddings (1536-dim), while the new HuggingFace model outputs 384-dim vectors.
 
-<ul>
-<li>https://python.langchain.com/docs/integrations/vectorstores/supabase/</li>
-<li>https://python.langchain.com/docs/integrations/text_embedding/openai/</li>
-<li>https://platform.openai.com/docs/guides/embeddings</li>
-<li>https://www.kaggle.com/code/youssef19/documents-splitting-with-langchain</li>
-<li>https://openai.com/index/new-embedding-models-and-api-updates/</li>
-<li>https://zilliz.com/ai-models/text-embedding-3-small</li>
-</ul>
+You have two options:
+
+1) Recommended: Change the Supabase column to 384-dim and re-ingest
+    - In Supabase SQL editor:
+
+```sql
+-- Adjust to your schema/table/column names if different
+BEGIN;
+-- If you can afford to drop the existing embeddings column:
+ALTER TABLE documents DROP COLUMN embedding;
+ALTER TABLE documents ADD COLUMN embedding vector(384);
+COMMIT;
+
+-- If you have an RPC for similarity search, ensure it accepts vector(384)
+-- Example:
+CREATE OR REPLACE FUNCTION match_documents(
+   query_embedding vector(384),
+   match_count int DEFAULT 5
+)
+RETURNS TABLE(id uuid, content text, metadata jsonb, similarity float)
+LANGUAGE SQL STABLE AS $$
+   SELECT
+      d.id,
+      d.content,
+      d.metadata,
+      1 - (d.embedding <=> query_embedding) AS similarity
+   FROM documents d
+   ORDER BY d.embedding <=> query_embedding
+   LIMIT match_count;
+$$;
+```
+
+Then re-run:
+
+```powershell
+python ingest_in_db.py
+```
+
+2) Keep the 1536-dim column and use a 1536-dim embedding model
+    - Most free local models are 384/768/1024 dims. 1536-dim is specific to OpenAI’s `text-embedding-3-small`.
+    - If you want to keep 1536 dims without OpenAI, you’ll likely need to change the table to 384 (option 1).
