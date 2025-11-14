@@ -35,7 +35,7 @@ vector_store = SupabaseVectorStore(
 )
 
 # initiate large language model (Groq) (temperature = 0)
-# Note: previous model llama3-70b-8192 was decommissioned by Groq
+# Note: previous model llama-3.3-70b-versatile was decommissioned by Groq
 llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 
 # fetch a tool-calling prompt compatible with the agent builder

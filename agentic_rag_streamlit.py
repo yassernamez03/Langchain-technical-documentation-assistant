@@ -43,7 +43,7 @@ vector_store = SupabaseVectorStore(
  
 # initiating llm (Groq)
 # Note: previous model llama3-70b-8192 was decommissioned by Groq
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model="qwen/qwen3-32b", temperature=0)
 
 # pulling a tool-calling prompt compatible with the agent builder
 prompt = hub.pull("hwchase17/openai-functions-agent")
